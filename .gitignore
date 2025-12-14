@@ -1,0 +1,88 @@
+# ========================================
+# Foundry Project - .gitignore
+# ========================================
+
+# ========================================
+# Variables de entorno sensibles
+# ========================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ========================================
+# Foundry Build Output
+# ========================================
+out/
+cache/
+broadcast/
+!broadcast/.gitkeep
+
+# ========================================
+# Dependencies (opcional - descomenta si NO quieres commitear libs)
+# ========================================
+# lib/
+# libs/
+
+# ========================================
+# Foundry Cache y temporales
+# ========================================
+cache/
+forge-cache/
+test-failures/
+
+# ========================================
+# IDEs y editores
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ========================================
+# Logs y reportes
+# ========================================
+*.log
+logs/
+gas-report.txt
+coverage/
+coverage.json
+lcov.info
+
+# ========================================
+# Archivos de deployment
+# ========================================
+# Descomentar si no quieres commitear direcciones de contratos desplegados
+# deployments/
+# scripts/deployments/
+
+# ========================================
+# Archivos temporales
+# ========================================
+*.tmp
+*.temp
+.temp/
+
+# ========================================
+# Archivos de sistema
+# ========================================
+Thumbs.db
+.DS_Store
+
+# ========================================
+# Keys y certificados
+# ========================================
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# ========================================
+# Otros
+# ========================================
+*.bak
+*.backup
+
