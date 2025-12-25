@@ -11,6 +11,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract Identity is Ownable {
     // Mapping of claim topic => issuer => claim data
     mapping(uint256 => mapping(address => Claim)) private claims;
+    
+    // Address of TrustedIssuersRegistry (opcional, para validación)
+    address public trustedIssuersRegistry;
 
     struct Claim {
         uint256 topic;
@@ -33,6 +36,14 @@ contract Identity is Ownable {
     event ClaimRemoved(uint256 indexed topic, address indexed issuer);
 
     constructor(address initialOwner) Ownable(initialOwner) {}
+    
+    /**
+     * @dev Set the TrustedIssuersRegistry address
+     * @param _trustedIssuersRegistry Address of the TrustedIssuersRegistry contract
+     */
+    function setTrustedIssuersRegistry(address _trustedIssuersRegistry) external onlyOwner {
+        trustedIssuersRegistry = _trustedIssuersRegistry;
+    }
 
     /**
      * @dev Add a claim to the identity
@@ -113,6 +124,64 @@ contract Identity is Ownable {
      */
     function claimExists(uint256 _topic, address _issuer) external view returns (bool) {
         return claims[_topic][_issuer].issuer != address(0);
+    }
+    
+    /**
+     * @dev Add a claim to the identity (can be called by owner or trusted issuer)
+     * @param _topic Claim topic (e.g., 1 for KYC)
+     * @param _scheme Signature scheme (1 = ECDSA)
+     * @param _issuer Address of the claim issuer
+     * @param _signature Signature of the claim
+     * @param _data Claim data
+     * @param _uri URI for additional claim information
+     */
+    function addClaimByIssuer(
+        uint256 _topic,
+        uint256 _scheme,
+        address _issuer,
+        bytes memory _signature,
+        bytes memory _data,
+        string memory _uri
+    ) external returns (bytes32) {
+        // Verificar que el caller sea el issuer o el owner
+        require(
+            msg.sender == _issuer || msg.sender == owner(),
+            "Identity: Only issuer or owner can add claims"
+        );
+        
+        // Si hay un TrustedIssuersRegistry configurado, verificar que el issuer sea confiable
+        if (trustedIssuersRegistry != address(0)) {
+            // Interfaz mínima para verificar Trusted Issuer
+            (bool success, bytes memory data) = trustedIssuersRegistry.staticcall(
+                abi.encodeWithSignature("isTrustedIssuer(address)", _issuer)
+            );
+            if (success && data.length > 0) {
+                bool isTrusted = abi.decode(data, (bool));
+                require(isTrusted, "Identity: Issuer must be a trusted issuer");
+            }
+        }
+        
+        claims[_topic][_issuer] = Claim({
+            topic: _topic,
+            scheme: _scheme,
+            issuer: _issuer,
+            signature: _signature,
+            data: _data,
+            uri: _uri
+        });
+
+        emit ClaimAdded(_topic, _scheme, _issuer, _signature, _data, _uri);
+
+        bytes32 claimId;
+        assembly {
+            // Store issuer at memory position 0x00
+            mstore(0x00, _issuer)
+            // Store topic at memory position 0x20
+            mstore(0x20, _topic)
+            // Hash 64 bytes (2 * 32 bytes)
+            claimId := keccak256(0x00, 0x40)
+        }
+        return claimId;
     }
 }
 

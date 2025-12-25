@@ -1,0 +1,18 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "description": "Shared MongoDB configuration and models for RWA platform",
+  "main": "index.ts",
+  "scripts": {
+    "test-connection": "tsx db/test-connection.ts"
+  },
+  "dependencies": {
+    "mongoose": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.7.0",
+    "typescript": "^5"
+  }
+}
+
