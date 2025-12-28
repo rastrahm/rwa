@@ -2,42 +2,92 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTokenFactory } from '@/app/hooks/useTokenFactory';
+import { useWallet } from '@/app/hooks/useWallet';
+import { ERC20_ABI } from '@/app/lib/contracts/abis';
+import { ethers } from 'ethers';
 import type { TokenInfo } from '@/app/lib/types/token';
+
+// ABI para funciones de AccessControl
+const ACCESS_CONTROL_ABI = [
+  'function hasRole(bytes32 role, address account) external view returns (bool)',
+  'function DEFAULT_ADMIN_ROLE() external view returns (bytes32)',
+  'function getRoleMember(bytes32 role, uint256 index) external view returns (address)',
+  'function getRoleMemberCount(bytes32 role) external view returns (uint256)',
+];
 
 interface TokenWithMetadata extends TokenInfo {
   description?: string;
   website?: string;
   attachments?: any[];
+  admin?: string;
 }
 
 export function TokenList() {
   const { tokens, loading, error } = useTokenFactory();
+  const { provider } = useWallet();
   const [tokensWithMetadata, setTokensWithMetadata] = useState<TokenWithMetadata[]>([]);
 
   useEffect(() => {
     const loadMetadata = async () => {
       try {
+        // Cargar metadatos desde MongoDB
         const response = await fetch('/api/tokens');
+        const metadataMap = new Map();
+        
         if (response.ok) {
           const data = await response.json();
-          const metadataMap = new Map(
-            data.tokens.map((t: any) => [t.address.toLowerCase(), t])
-          );
+          data.tokens.forEach((t: any) => {
+            metadataMap.set(t.address.toLowerCase(), t);
+          });
+        }
 
-          const enriched = tokens.map((token) => {
+        // Enriquecer tokens con metadatos y admin
+        const enriched = await Promise.all(
+          tokens.map(async (token) => {
             const metadata = metadataMap.get(token.address.toLowerCase());
+            let admin: string | undefined;
+
+            // Intentar obtener el admin del token
+            if (provider) {
+              try {
+                const code = await provider.getCode(token.address);
+                if (code && code !== '0x' && code !== '0x0') {
+                  const tokenContract = new ethers.Contract(
+                    token.address,
+                    [...ERC20_ABI, ...ACCESS_CONTROL_ABI],
+                    provider
+                  );
+
+                  try {
+                    const DEFAULT_ADMIN_ROLE = '0x0000000000000000000000000000000000000000000000000000000000000000';
+                    const adminRole = await tokenContract.DEFAULT_ADMIN_ROLE().catch(() => DEFAULT_ADMIN_ROLE);
+                    const adminCount = await tokenContract.getRoleMemberCount(adminRole).catch(() => 0);
+                    
+                    if (adminCount > 0) {
+                      admin = await tokenContract.getRoleMember(adminRole, 0).catch(() => undefined);
+                    }
+                  } catch (err) {
+                    // Si falla, no mostrar admin
+                    console.warn(`Error getting admin for ${token.address}:`, err);
+                  }
+                }
+              } catch (err) {
+                // Ignorar errores al obtener admin
+                console.warn(`Error checking code for ${token.address}:`, err);
+              }
+            }
+
             return {
               ...token,
               description: metadata?.description,
               website: metadata?.website,
               attachments: metadata?.attachments || [],
+              admin,
             };
-          });
+          })
+        );
 
-          setTokensWithMetadata(enriched);
-        } else {
-          setTokensWithMetadata(tokens);
-        }
+        setTokensWithMetadata(enriched);
       } catch (err) {
         console.error('Error loading metadata:', err);
         setTokensWithMetadata(tokens);
@@ -49,7 +99,7 @@ export function TokenList() {
     } else {
       setTokensWithMetadata([]);
     }
-  }, [tokens]);
+  }, [tokens, provider]);
 
   if (loading) {
     return (
@@ -121,6 +171,14 @@ export function TokenList() {
                   <span className="font-medium">Supply:</span>{' '}
                   {token.totalSupply.toString()}
                 </p>
+                {token.admin && (
+                  <p>
+                    <span className="font-medium">Administrador:</span>{' '}
+                    <span className="font-mono">
+                      {token.admin.slice(0, 10)}...{token.admin.slice(-8)}
+                    </span>
+                  </p>
+                )}
                 <p className="font-mono break-all">
                   {token.address.slice(0, 10)}...{token.address.slice(-8)}
                 </p>

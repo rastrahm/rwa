@@ -69,6 +69,23 @@ Script para verificar el estado de MongoDB e intentar iniciarlo si es necesario.
 
 **Nota:** Requiere permisos sudo para iniciar MongoDB.
 
+### `clean-mongodb.sh`
+Script para limpiar todas las colecciones de la base de datos MongoDB.
+
+**Uso:**
+```bash
+./scripts/clean-mongodb.sh
+```
+
+**Funcionalidades:**
+- Lista todas las colecciones existentes y su cantidad de documentos
+- Elimina todos los documentos de todas las colecciones (excepto colecciones del sistema)
+- Muestra un resumen de documentos eliminados
+
+**⚠️ ADVERTENCIA:** Este script elimina TODOS los datos de la base de datos. Úsalo con precaución.
+
+**Nota:** Requiere que MongoDB esté corriendo y que `mongosh` o `mongo` estén instalados.
+
 ### `start-web.sh`
 Script para iniciar solo las interfaces web (sin desplegar contratos).
 

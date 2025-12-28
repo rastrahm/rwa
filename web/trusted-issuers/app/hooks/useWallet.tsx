@@ -34,38 +34,112 @@ function useWalletInternal() {
     return networks[chainId] || `Chain ${chainId}`;
   };
 
-  const handleAccountsChanged = useCallback((accounts: string[]) => {
+  const handleAccountsChanged = useCallback(async (accounts: string[]) => {
+    console.log('🔄 Evento accountsChanged recibido:', accounts);
+    
     if (accounts.length === 0) {
+      console.log('⚠️ No hay cuentas, desconectando wallet...');
       setWallet(null);
+      setProvider(null);
+      setSigner(null);
       return;
     }
 
-    const address = accounts[0];
+    const newAddress = accounts[0].toLowerCase();
+    console.log('🔄 Cambio de cuenta detectado:', newAddress);
 
-    setWallet((prevWallet) => {
-      // Si ya teníamos wallet, solo actualizamos la dirección
-      if (prevWallet) {
-        return { ...prevWallet, address };
+    // Obtener el provider actual o crear uno nuevo
+    let currentProvider: BrowserProvider;
+    const eth = (window as any).ethereum;
+    
+    if (!eth) {
+      console.error('❌ window.ethereum no está disponible');
+      return;
+    }
+
+    try {
+      // Crear un nuevo provider para asegurar que esté actualizado
+      currentProvider = new BrowserProvider(eth);
+      setProvider(currentProvider);
+
+      // Obtener el nuevo signer (esto automáticamente usará la cuenta actual de MetaMask)
+      const newSigner = await currentProvider.getSigner();
+      setSigner(newSigner);
+
+      // Verificar que el signer tiene la dirección correcta
+      let finalSigner = newSigner;
+      let finalAddress = newAddress;
+      
+      const signerAddress = await newSigner.getAddress();
+      const signerAddressLower = signerAddress.toLowerCase();
+      console.log('✅ Signer obtenido con dirección:', signerAddressLower);
+      console.log('📋 Dirección esperada:', newAddress);
+      
+      if (signerAddressLower !== newAddress) {
+        console.warn('⚠️ La dirección del signer no coincide con la cuenta seleccionada. Reintentando...');
+        
+        // Esperar un momento para que MetaMask actualice completamente
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Forzar actualización del provider
+        const refreshedProvider = new BrowserProvider(eth);
+        const refreshedSigner = await refreshedProvider.getSigner();
+        const refreshedAddress = await refreshedSigner.getAddress();
+        const refreshedAddressLower = refreshedAddress.toLowerCase();
+        console.log('✅ Signer refrescado con dirección:', refreshedAddressLower);
+        
+        if (refreshedAddressLower !== newAddress) {
+          console.error('❌ No se pudo actualizar el signer a la cuenta correcta');
+          console.error('   Esperado:', newAddress);
+          console.error('   Obtenido:', refreshedAddressLower);
+          // Usar la dirección que MetaMask reporta (puede ser un problema de timing)
+          finalAddress = refreshedAddressLower;
+          currentProvider = refreshedProvider;
+          setProvider(refreshedProvider);
+          setSigner(refreshedSigner);
+          finalSigner = refreshedSigner;
+        } else {
+          currentProvider = refreshedProvider;
+          setProvider(refreshedProvider);
+          setSigner(refreshedSigner);
+          finalSigner = refreshedSigner;
+          finalAddress = newAddress;
+        }
+      } else {
+        finalAddress = newAddress;
       }
 
-      // Si no había wallet en este hook (otro componente hizo el connect),
-      // creamos una instancia mínima usando window.ethereum
-      if (typeof window !== 'undefined' && window.ethereum) {
-        const browserProvider = new BrowserProvider(window.ethereum);
-        setProvider(browserProvider);
-        browserProvider.getSigner().then(setSigner).catch(() => {});
-        return {
-          address,
-          provider: browserProvider,
-          chainId: 0,
-          networkName: 'Desconocida',
-          signer: null,
-        };
-      }
+      // Obtener información de la red
+      const network = await currentProvider.getNetwork();
+      const chainId = Number(network.chainId);
+      const networkName = getNetworkName(chainId);
 
-      return null;
-    });
-  }, []);
+      // Actualizar el estado del wallet con la nueva información
+      const updatedWallet: WalletInfo = {
+        address: finalAddress,
+        provider: currentProvider,
+        chainId,
+        networkName,
+        signer: finalSigner,
+      };
+
+      setWallet(updatedWallet);
+      console.log('✅ Wallet actualizado correctamente:', {
+        address: updatedWallet.address,
+        chainId: updatedWallet.chainId,
+        networkName: updatedWallet.networkName,
+      });
+    } catch (error: any) {
+      console.error('❌ Error al actualizar wallet después de cambio de cuenta:', error);
+      // Intentar mantener el estado anterior si es posible
+      setWallet((prevWallet) => {
+        if (prevWallet) {
+          return { ...prevWallet, address: newAddress };
+        }
+        return null;
+      });
+    }
+  }, [getNetworkName]);
 
   const handleChainChanged = useCallback((chainId: string) => {
     const newChainId = parseInt(chainId, 16);
@@ -182,23 +256,42 @@ function useWalletInternal() {
       }
     };
 
+    // Solo ejecutar una vez al montar
     detectWallets();
 
-    // Escuchar cambios en accounts / chainId como antes
+    // Escuchar cambios en accounts / chainId (estos listeners se mantienen activos)
     const eth = window.ethereum as any;
     if (eth && typeof eth.on === 'function') {
+      console.log('👂 Configurando listeners para accountsChanged y chainChanged');
       eth.on('accountsChanged', handleAccountsChanged);
       eth.on('chainChanged', handleChainChanged);
+      
+      // También escuchar el evento 'disconnect' para manejar desconexiones
+      eth.on('disconnect', () => {
+        console.log('🔌 Wallet desconectado');
+        setWallet(null);
+        setProvider(null);
+        setSigner(null);
+      });
+    } else {
+      console.warn('⚠️ window.ethereum no tiene método on(), los listeners no se configuraron');
     }
 
     return () => {
       const ethCleanup = window.ethereum as any;
       if (ethCleanup && typeof ethCleanup.removeListener === 'function') {
+        console.log('🧹 Limpiando listeners de wallet');
         ethCleanup.removeListener('accountsChanged', handleAccountsChanged);
         ethCleanup.removeListener('chainChanged', handleChainChanged);
+        ethCleanup.removeListener('disconnect', () => {
+          setWallet(null);
+          setProvider(null);
+          setSigner(null);
+        });
       }
     };
-  }, [handleAccountsChanged, handleChainChanged]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Array vacío: solo ejecutar una vez al montar
 
   const connectWallet = useCallback(async (walletOption?: WalletOption) => {
     setIsConnecting(true);
@@ -246,10 +339,8 @@ function useWalletInternal() {
 
       const browserProvider = new BrowserProvider(provider);
       setProvider(browserProvider);
-      const signer = await browserProvider.getSigner();
-      setSigner(signer);
       
-      // Solicitar acceso a las cuentas
+      // PRIMERO: Solicitar acceso a las cuentas (esto actualiza la cuenta activa en MetaMask)
       console.log(`📝 Solicitando acceso a ${walletName}...`);
       const accounts = await browserProvider.send('eth_requestAccounts', []);
       
@@ -257,19 +348,54 @@ function useWalletInternal() {
         throw new Error('No se encontraron cuentas. Por favor, desbloquea tu wallet.');
       }
 
-      const network = await browserProvider.getNetwork();
+      const selectedAddress = accounts[0].toLowerCase();
+      console.log('✅ Cuenta seleccionada:', selectedAddress);
+
+      // SEGUNDO: Obtener el signer DESPUÉS de solicitar las cuentas
+      // Esto asegura que el signer use la cuenta que el usuario seleccionó
+      const signer = await browserProvider.getSigner();
+      setSigner(signer);
+      
+      // Verificar que el signer tiene la dirección correcta
+      const signerAddress = await signer.getAddress();
+      const signerAddressLower = signerAddress.toLowerCase();
+      console.log('✅ Signer obtenido con dirección:', signerAddressLower);
+      
+      // Si no coincide, crear un nuevo provider y signer
+      let finalProvider = browserProvider;
+      let finalSigner = signer;
+      
+      if (signerAddressLower !== selectedAddress) {
+        console.warn('⚠️ La dirección del signer no coincide con la cuenta seleccionada. Reintentando...');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const refreshedProvider = new BrowserProvider(provider);
+        const refreshedSigner = await refreshedProvider.getSigner();
+        const refreshedAddress = await refreshedSigner.getAddress();
+        console.log('✅ Signer refrescado con dirección:', refreshedAddress.toLowerCase());
+        
+        if (refreshedAddress.toLowerCase() === selectedAddress) {
+          finalProvider = refreshedProvider;
+          finalSigner = refreshedSigner;
+          setProvider(refreshedProvider);
+          setSigner(refreshedSigner);
+        } else {
+          console.warn('⚠️ Signer refrescado tampoco coincide, usando la dirección del signer');
+        }
+      }
+
+      const network = await finalProvider.getNetwork();
       const chainId = Number(network.chainId);
       const networkName = getNetworkName(chainId);
 
       const walletInfo: WalletInfo = {
-        address: accounts[0],
-        provider: browserProvider,
+        address: selectedAddress,
+        provider: finalProvider,
         chainId,
         networkName,
-        signer,
+        signer: finalSigner,
       };
 
-      console.log(`✓ Conectado a ${walletName}:`, accounts[0]);
+      console.log(`✓ Conectado a ${walletName}:`, selectedAddress);
       setWallet(walletInfo);
     } catch (err: any) {
       let errorMessage = 'Error al conectar el wallet';

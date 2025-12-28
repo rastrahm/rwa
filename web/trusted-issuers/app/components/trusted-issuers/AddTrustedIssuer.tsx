@@ -10,7 +10,7 @@ import { contracts } from '@/shared/lib/client';
 
 export function AddTrustedIssuer() {
   const { wallet, provider } = useWallet();
-  const { addTrustedIssuer, loading, error } = useTrustedIssuersRegistry();
+  const { addTrustedIssuer, updateIssuerClaimTopics, loadTrustedIssuers, loading, error } = useTrustedIssuersRegistry();
   const [issuerAddress, setIssuerAddress] = useState('');
   const [selectedTopics, setSelectedTopics] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,6 +18,8 @@ export function AddTrustedIssuer() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [checkingOwner, setCheckingOwner] = useState(false);
+  const [existingIssuer, setExistingIssuer] = useState<{ address: string; topics: number[] } | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
 
   // Verificar si el wallet conectado es el owner del contrato
   useEffect(() => {
@@ -47,6 +49,45 @@ export function AddTrustedIssuer() {
 
     checkOwner();
   }, [wallet?.address, provider, contracts.trustedIssuersRegistry]);
+
+  // Verificar si el issuer ya existe cuando cambia la dirección
+  useEffect(() => {
+    const checkExistingIssuer = async () => {
+      if (!issuerAddress.trim() || !ethers.isAddress(issuerAddress.trim()) || !provider || !contracts.trustedIssuersRegistry) {
+        setExistingIssuer(null);
+        return;
+      }
+
+      try {
+        setCheckingExisting(true);
+        const registry = new ethers.Contract(
+          contracts.trustedIssuersRegistry,
+          TRUSTED_ISSUERS_REGISTRY_ABI,
+          provider
+        );
+
+        const isTrusted = await registry.isTrustedIssuer(issuerAddress.trim());
+        if (isTrusted) {
+          const topics = await registry.getIssuerClaimTopics(issuerAddress.trim());
+          setExistingIssuer({
+            address: issuerAddress.trim(),
+            topics: topics.map((t: bigint) => Number(t)),
+          });
+        } else {
+          setExistingIssuer(null);
+        }
+      } catch (err: any) {
+        console.error('Error checking existing issuer:', err);
+        setExistingIssuer(null);
+      } finally {
+        setCheckingExisting(false);
+      }
+    };
+
+    // Debounce para no hacer demasiadas llamadas
+    const timeoutId = setTimeout(checkExistingIssuer, 500);
+    return () => clearTimeout(timeoutId);
+  }, [issuerAddress, provider, contracts.trustedIssuersRegistry]);
 
   const handleTopicToggle = (topicId: number) => {
     setSelectedTopics((prev) =>
@@ -79,19 +120,46 @@ export function AddTrustedIssuer() {
       setSubmitError(null);
       setSuccess(null);
 
-      const txHash = await addTrustedIssuer(
-        issuerAddress.trim(),
-        selectedTopics.map((t) => BigInt(t))
-      );
-
-      setSuccess(`Trusted Issuer agregado exitosamente. TX: ${txHash}`);
+      let txHash: string;
+      
+      // Si el issuer ya existe, actualizar sus topics en lugar de agregarlo
+      if (existingIssuer) {
+        console.log('📝 Issuer ya existe, actualizando topics...', {
+          existing: existingIssuer.topics,
+          nuevos: selectedTopics,
+        });
+        txHash = await updateIssuerClaimTopics(
+          issuerAddress.trim(),
+          selectedTopics.map((t) => BigInt(t))
+        );
+        setSuccess(`Topics del Trusted Issuer actualizados exitosamente. TX: ${txHash}`);
+      } else {
+        txHash = await addTrustedIssuer(
+          issuerAddress.trim(),
+          selectedTopics.map((t) => BigInt(t))
+        );
+        setSuccess(`Trusted Issuer agregado exitosamente. TX: ${txHash}`);
+      }
+      
+      // El contexto ya recarga automáticamente la lista después de addTrustedIssuer o updateIssuerClaimTopics
+      // No es necesario llamar loadTrustedIssuers manualmente
       
       // Limpiar formulario
       setIssuerAddress('');
       setSelectedTopics([]);
+      setExistingIssuer(null);
     } catch (err: any) {
-      console.error('Error adding trusted issuer:', err);
-      setSubmitError(err.message || 'Error al agregar trusted issuer');
+      console.error('Error adding/updating trusted issuer:', err);
+      let errorMessage = err.message || 'Error al agregar/actualizar trusted issuer';
+      
+      // Si el error es "Issuer already trusted", sugerir usar updateIssuerClaimTopics
+      if (errorMessage.includes('Issuer already trusted') || errorMessage.includes('already trusted')) {
+        errorMessage = `El issuer ${issuerAddress.trim()} ya está registrado como Trusted Issuer. ` +
+          `Si quieres actualizar sus topics, el sistema debería detectarlo automáticamente. ` +
+          `Si el problema persiste, verifica que el issuer esté en la lista de Trusted Issuers.`;
+      }
+      
+      setSubmitError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -167,6 +235,26 @@ export function AddTrustedIssuer() {
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Dirección del wallet que será registrado como Trusted Issuer.
           </p>
+          {checkingExisting && (
+            <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+              🔍 Verificando si el issuer ya existe...
+            </p>
+          )}
+          {existingIssuer && !checkingExisting && (
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+                ℹ️ Este issuer ya está registrado como Trusted Issuer
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Topics actuales: {existingIssuer.topics.length > 0 
+                  ? existingIssuer.topics.join(', ') 
+                  : 'Ninguno'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                Al enviar, se actualizarán sus topics en lugar de crear uno nuevo.
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -231,11 +319,18 @@ export function AddTrustedIssuer() {
             loading ||
             !issuerAddress.trim() ||
             selectedTopics.length === 0 ||
-            !ethers.isAddress(issuerAddress.trim())
+            !ethers.isAddress(issuerAddress.trim()) ||
+            checkingExisting
           }
           className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
         >
-          {isSubmitting || loading ? 'Agregando...' : 'Agregar Trusted Issuer'}
+          {checkingExisting 
+            ? 'Verificando...' 
+            : isSubmitting || loading 
+              ? (existingIssuer ? 'Actualizando...' : 'Agregando...') 
+              : existingIssuer 
+                ? 'Actualizar Topics del Trusted Issuer' 
+                : 'Agregar Trusted Issuer'}
         </button>
       </form>
     </div>

@@ -27,25 +27,36 @@ async function connectDB(): Promise<typeof mongoose> {
   if (cached.conn) {
     const readyState = cached.conn.connection.readyState;
     if (readyState === 1) {
-      return cached.conn;
+      // Verificar que la conexión siga activa haciendo un ping rápido
+      try {
+        await cached.conn.connection.db.admin().ping();
+        return cached.conn;
+      } catch (err) {
+        console.warn('⚠️ Conexión cacheada no responde, reconectando...');
+        cached.conn = null;
+        cached.promise = null;
+      }
+    } else {
+      // Limpiar si no está conectado
+      cached.conn = null;
+      cached.promise = null;
     }
-    // Limpiar si no está conectado
-    cached.conn = null;
-    cached.promise = null;
   }
 
   // Si no hay promesa de conexión, crear una
   if (!cached.promise) {
     const opts = {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 30000, // Aumentado a 30 segundos
       socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000,
-      // bufferCommands y bufferMaxEntries fueron removidos en versiones recientes de Mongoose
-      // En su lugar, usamos maxPoolSize y minPoolSize para controlar la conexión
+      connectTimeoutMS: 30000, // Aumentado a 30 segundos
+      // Usar maxPoolSize y minPoolSize para controlar la conexión
       maxPoolSize: 10,
       minPoolSize: 1,
+      // Nota: bufferMaxEntries y bufferCommands fueron removidos en versiones recientes de Mongoose
+      // No los incluimos aquí para evitar errores de compatibilidad
     };
 
+    console.log('🔌 Conectando a MongoDB:', MONGODB_URI.replace(/\/\/.*@/, '//***@')); // Ocultar credenciales
     cached.promise = mongoose.connect(MONGODB_URI, opts);
   }
 

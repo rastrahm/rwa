@@ -55,9 +55,15 @@ export function ApproveTrustedIssuerRequests() {
         );
 
         const owner = await registry.owner();
-        setIsOwner(owner.toLowerCase() === wallet.address.toLowerCase());
+        const isOwnerAddress = owner.toLowerCase() === wallet.address.toLowerCase();
+        console.log('🔍 Verificando owner:', {
+          contractOwner: owner,
+          walletAddress: wallet.address,
+          isOwner: isOwnerAddress,
+        });
+        setIsOwner(isOwnerAddress);
       } catch (err: any) {
-        console.error('Error checking owner:', err);
+        console.error('❌ Error checking owner:', err);
         setIsOwner(false);
         // No establecer error aquí, solo si no es owner
       } finally {
@@ -73,16 +79,19 @@ export function ApproveTrustedIssuerRequests() {
     try {
       setLoadingRequests(true);
       setError(null);
+      console.log('📋 Cargando solicitudes de Trusted Issuer...');
       const response = await fetch('/api/trusted-issuers/request?status=pending');
       
       if (!response.ok) {
-        throw new Error('Error al cargar solicitudes');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al cargar solicitudes');
       }
 
       const data = await response.json();
+      console.log('✅ Solicitudes cargadas:', data.requests?.length || 0, data.requests);
       setRequests(data.requests || []);
     } catch (err: any) {
-      console.error('Error loading requests:', err);
+      console.error('❌ Error loading requests:', err);
       setError(err.message || 'Error al cargar solicitudes');
       setRequests([]);
     } finally {

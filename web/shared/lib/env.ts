@@ -8,7 +8,30 @@ export const env = {
   
   // Blockchain
   // En cliente, Next.js requiere NEXT_PUBLIC_ para exponer variables
-  RPC_URL: process.env.NEXT_PUBLIC_RPC_URL || process.env.RPC_URL || 'http://localhost:8545',
+  RPC_URL: (() => {
+    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.RPC_URL || 'http://localhost:8545';
+    
+    // Validar que la URL no sea una URL de twnodes expirada o inválida
+    if (rpcUrl.includes('twnodes.com') || rpcUrl.includes('naas/session')) {
+      console.warn('⚠️ URL RPC inválida o expirada detectada:', rpcUrl);
+      console.warn('⚠️ Usando fallback a localhost:8545 (Anvil)');
+      return 'http://localhost:8545';
+    }
+    
+    // Validar que la URL sea válida
+    try {
+      const url = new URL(rpcUrl);
+      if (!url.protocol.startsWith('http')) {
+        console.warn('⚠️ URL RPC debe usar http o https, usando fallback');
+        return 'http://localhost:8545';
+      }
+    } catch (e) {
+      console.warn('⚠️ URL RPC inválida, usando fallback a localhost:8545');
+      return 'http://localhost:8545';
+    }
+    
+    return rpcUrl;
+  })(),
   PRIVATE_KEY: process.env.PRIVATE_KEY, // Solo servidor, nunca NEXT_PUBLIC_
   CHAIN_ID: parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID || '31337', 10),
   

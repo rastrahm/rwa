@@ -43,6 +43,23 @@ contract IdentityRegistry is Ownable {
     }
 
     /**
+     * @dev Register your own identity (self-registration)
+     * @param _identity Identity contract address
+     * Allows users to register themselves without needing owner permissions
+     */
+    function registerSelf(address _identity) external {
+        require(msg.sender != address(0), "Invalid wallet address");
+        require(_identity != address(0), "Invalid identity address");
+        require(!registered[msg.sender], "Wallet already registered");
+
+        identities[msg.sender] = Identity(_identity);
+        registered[msg.sender] = true;
+        registeredAddresses.push(msg.sender);
+
+        emit IdentityRegistered(msg.sender, _identity);
+    }
+
+    /**
      * @dev Update an identity for a wallet
      * @param _wallet Wallet address
      * @param _identity New identity contract address

@@ -6,6 +6,9 @@ import { RegisterIdentity } from '@/app/components/identity/RegisterIdentity';
 import { ClaimsList } from '@/app/components/identity/ClaimsList';
 import { RequestClaim } from '@/app/components/identity/RequestClaim';
 import { ClaimRequestsList } from '@/app/components/identity/ClaimRequestsList';
+import { ConfigureIdentityTrustedIssuersRegistry } from '@/app/components/identity/ConfigureIdentityTrustedIssuersRegistry';
+import { IdentityAnalytics } from '@/app/components/identity/IdentityAnalytics';
+import { RouteDiagram } from '@/app/components/identity/RouteDiagram';
 import { useIdentityRegistry } from '@/app/hooks/useIdentityRegistry';
 
 export default function Home() {
@@ -25,6 +28,7 @@ export default function Home() {
         <div className="space-y-6">
           <IdentityCard />
           <RegisterIdentity />
+          <ConfigureIdentityTrustedIssuersRegistry />
         </div>
 
         {/* Columna derecha: Claims */}
@@ -33,6 +37,16 @@ export default function Home() {
           <ClaimRequestsList identityAddress={identityAddress} />
           <RequestClaim identityAddress={identityAddress} />
         </div>
+      </div>
+
+      {/* Sección de análisis y gráficos */}
+      <div className="mb-6">
+        <IdentityAnalytics />
+      </div>
+
+      {/* Sección de rutas de funcionamiento */}
+      <div className="mb-6">
+        <RouteDiagram />
       </div>
     </div>
   );

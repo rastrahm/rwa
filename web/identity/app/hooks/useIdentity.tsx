@@ -34,7 +34,22 @@ export function useIdentity(identityAddress: string | null) {
       setError(null);
 
       // Verificar si el contrato tiene código
-      const code = await provider.getCode(identityAddress);
+      let code;
+      try {
+        code = await provider.getCode(identityAddress);
+      } catch (err: any) {
+        console.error('Error al obtener código del contrato Identity:', err);
+        // Si el error es por URL RPC inválida, mostrar mensaje específico
+        if (err.message?.includes('Invalid RPC URL') || err.message?.includes('twnodes')) {
+          setError('Error de conexión: La URL RPC configurada en MetaMask es inválida. Por favor, configura MetaMask para usar Anvil en localhost:8545.');
+        } else {
+          setError(`Error al conectar con la blockchain: ${err.message || 'Error desconocido'}`);
+        }
+        setOwner(null);
+        setClaims([]);
+        return;
+      }
+      
       if (code === '0x' || code === '0x0') {
         setOwner(null);
         setClaims([]);
@@ -139,7 +154,18 @@ export function useIdentity(identityAddress: string | null) {
         setError(null);
 
         // Verificar si el contrato existe en la blockchain
-        const code = await provider.getCode(identityAddress);
+        let code;
+        try {
+          code = await provider.getCode(identityAddress);
+        } catch (err: any) {
+          console.error('Error al obtener código del contrato Identity:', err);
+          // Si el error es por URL RPC inválida, mostrar mensaje específico
+          if (err.message?.includes('Invalid RPC URL') || err.message?.includes('twnodes')) {
+            throw new Error('Error de conexión: La URL RPC configurada en MetaMask es inválida. Por favor, configura MetaMask para usar Anvil en localhost:8545.');
+          }
+          throw err;
+        }
+        
         if (!code || code === '0x' || code === '0x0') {
           throw new Error('El contrato Identity no existe en esta dirección. Por favor, verifica que el contrato esté desplegado correctamente.');
         }

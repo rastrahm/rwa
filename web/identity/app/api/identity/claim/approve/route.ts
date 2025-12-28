@@ -86,7 +86,24 @@ export async function POST(request: Request) {
     const finalUri = claimRequest.uri || '';
 
     // Crear provider y wallet del issuer
+    console.log('🔗 Usando RPC URL:', env.RPC_URL);
     const provider = new ethers.JsonRpcProvider(env.RPC_URL);
+    
+    // Verificar que el provider esté funcionando
+    try {
+      const network = await provider.getNetwork();
+      console.log('✅ Provider conectado a red:', network.name, 'Chain ID:', network.chainId);
+    } catch (providerError: any) {
+      console.error('❌ Error al conectar con el provider:', providerError.message);
+      return NextResponse.json(
+        { 
+          error: 'Error al conectar con la blockchain',
+          details: `RPC URL: ${env.RPC_URL}. Verifica que Anvil esté corriendo en localhost:8545 o configura una RPC_URL válida.`,
+          rpcUrl: env.RPC_URL
+        },
+        { status: 500 }
+      );
+    }
     const issuerWallet = new ethers.Wallet(env.PRIVATE_KEY, provider);
 
     // Verificar que el wallet del issuer coincida con la dirección del issuer

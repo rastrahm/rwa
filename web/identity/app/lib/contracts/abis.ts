@@ -134,6 +134,14 @@ export const IDENTITY_REGISTRY_ABI = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  // registerSelf
+  {
+    inputs: [{ internalType: 'address', name: '_identity', type: 'address' }],
+    name: 'registerSelf',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
   // updateIdentity
   {
     inputs: [

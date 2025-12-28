@@ -125,5 +125,16 @@ export const ERC20_ABI = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  // mint
+  {
+    inputs: [
+      { internalType: 'address', name: 'to', type: 'address' },
+      { internalType: 'uint256', name: 'amount', type: 'uint256' },
+    ],
+    name: 'mint',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;
 

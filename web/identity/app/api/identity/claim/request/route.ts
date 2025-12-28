@@ -267,17 +267,21 @@ export async function POST(request: Request) {
 // GET: Obtener solicitudes de claims
 export async function GET(request: Request) {
   try {
+    console.log('📝 Iniciando carga de solicitudes de claims desde MongoDB...');
+    
     // Conectar a MongoDB y verificar que esté listo
     let mongooseInstance: typeof mongoose;
     try {
       mongooseInstance = await connectDB();
+      console.log('✅ Conectado a MongoDB');
       
       // Verificar que la conexión esté activa
       if (mongooseInstance.connection.readyState !== 1) {
+        console.warn('⚠️ Conexión no está lista, esperando...');
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('Timeout esperando conexión a MongoDB'));
-          }, 10000);
+          }, 30000); // Aumentado a 30 segundos
           
           if (mongooseInstance.connection.readyState === 1) {
             clearTimeout(timeout);
@@ -285,7 +289,7 @@ export async function GET(request: Request) {
           } else {
             mongooseInstance.connection.once('connected', () => {
               clearTimeout(timeout);
-              setTimeout(() => resolve(), 200);
+              setTimeout(() => resolve(), 500);
             });
             mongooseInstance.connection.once('error', (err) => {
               clearTimeout(timeout);
@@ -295,10 +299,17 @@ export async function GET(request: Request) {
         });
       }
       
-      // Hacer ping
-      await mongooseInstance.connection.db.admin().ping();
+      // Hacer ping para verificar que la conexión funcione
+      try {
+        await mongooseInstance.connection.db.admin().ping();
+        console.log('✅ Ping a MongoDB exitoso');
+      } catch (pingError: any) {
+        console.error('❌ Error en ping a MongoDB:', pingError);
+        throw new Error(`Conexión a MongoDB no está funcionando: ${pingError.message}`);
+      }
     } catch (dbError: any) {
-      console.error('Error connecting to MongoDB:', dbError);
+      console.error('❌ Error connecting to MongoDB:', dbError);
+      console.error('MongoDB connection state:', mongooseInstance?.connection?.readyState);
       return NextResponse.json(
         { error: 'Error de conexión a la base de datos', details: dbError.message },
         { status: 503 }

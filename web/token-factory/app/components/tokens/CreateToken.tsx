@@ -4,14 +4,18 @@ import React, { useState } from 'react';
 import { useTokenFactory } from '@/app/hooks/useTokenFactory';
 import { useWallet } from '@/app/hooks/useWallet';
 import { contracts } from '@/shared/lib/client';
+import { CLAIM_TOPICS } from '@/app/lib/types/trusted-issuers';
 
 export function CreateToken() {
   const { wallet } = useWallet();
   const { createToken, loading, error } = useTokenFactory();
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
+  const [maxSupply, setMaxSupply] = useState('');
+  const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [website, setWebsite] = useState('');
+  const [requiredClaimTopics, setRequiredClaimTopics] = useState<number[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -56,28 +60,44 @@ export function CreateToken() {
 
       // Registrar en MongoDB
       if (result.txHash && result.tokenAddress) {
-        const formData = new FormData();
-        formData.append(
-          'data',
-          JSON.stringify({
-            txHash: result.txHash,
-            fromAddress: wallet.address,
-            tokenAddress: result.tokenAddress,
-            name: name.trim(),
-            symbol: symbol.trim(),
-            description: description.trim() || undefined,
-            website: website.trim() || undefined,
-          })
-        );
+        try {
+          const formData = new FormData();
+          formData.append(
+            'data',
+            JSON.stringify({
+              txHash: result.txHash,
+              fromAddress: wallet.address,
+              tokenAddress: result.tokenAddress,
+              name: name.trim(),
+              symbol: symbol.trim(),
+              maxSupply: maxSupply.trim() ? maxSupply.trim() : undefined,
+              price: price.trim() ? price.trim() : undefined,
+              description: description.trim() || undefined,
+              website: website.trim() || undefined,
+              requiredClaimTopics: requiredClaimTopics.length > 0 ? requiredClaimTopics : undefined,
+            })
+          );
 
-        files.forEach((file) => {
-          formData.append('files', file);
-        });
+          files.forEach((file) => {
+            formData.append('files', file);
+          });
 
-        await fetch('/api/tokens/create', {
-          method: 'POST',
-          body: formData,
-        });
+          const response = await fetch('/api/tokens/create', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+            console.error('Error al registrar token en MongoDB:', errorData);
+            // No lanzar error aquí, solo loguear, porque el token ya fue creado
+          } else {
+            console.log('✅ Token registrado en MongoDB exitosamente');
+          }
+        } catch (mongoError: any) {
+          console.error('Error al registrar token en MongoDB:', mongoError);
+          // No lanzar error aquí, solo loguear, porque el token ya fue creado
+        }
       }
 
       setTxHash(result.txHash);
@@ -86,8 +106,11 @@ export function CreateToken() {
       // Limpiar formulario
       setName('');
       setSymbol('');
+      setMaxSupply('');
+      setPrice('');
       setDescription('');
       setWebsite('');
+      setRequiredClaimTopics([]);
       setFiles([]);
     } catch (err: any) {
       console.error('Error creating token:', err);
@@ -117,6 +140,16 @@ export function CreateToken() {
       <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
         Crear Nuevo Token
       </h3>
+
+      {/* Información sobre Claim Topics Requeridos */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+        <p className="text-blue-800 dark:text-blue-200 text-xs">
+          <strong>ℹ️ Sobre Claim Topics Requeridos:</strong> Puedes especificar qué claim topics son necesarios{' '}
+          para que los usuarios puedan adquirir este token. Los usuarios deben tener claims válidos de{' '}
+          <strong>trusted issuers</strong> para los topics seleccionados. Si no seleccionas ningún topic,{' '}
+          cualquier usuario verificado podrá adquirir el token.
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -160,6 +193,54 @@ export function CreateToken() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="maxSupply"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              Cantidad Máxima de Tokens
+            </label>
+            <input
+              type="number"
+              id="maxSupply"
+              value={maxSupply}
+              onChange={(e) => setMaxSupply(e.target.value)}
+              placeholder="1000000"
+              min="0"
+              step="1"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isSubmitting || loading}
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Cantidad total de tokens que se pueden emitir
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="price"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              Precio del Token (ETH)
+            </label>
+            <input
+              type="number"
+              id="price"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="0.01"
+              min="0"
+              step="0.0001"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isSubmitting || loading}
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Precio por token en ETH
+            </p>
+          </div>
+        </div>
+
         <div>
           <label
             htmlFor="description"
@@ -194,6 +275,53 @@ export function CreateToken() {
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={isSubmitting || loading}
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Claim Topics Requeridos (opcional)
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Selecciona los claim topics que los usuarios deben tener para poder adquirir este token.
+            Si no seleccionas ninguno, cualquier usuario verificado podrá adquirir el token.
+          </p>
+          <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 max-h-60 overflow-y-auto">
+            <div className="space-y-2">
+              {CLAIM_TOPICS.map((topic) => (
+                <label
+                  key={topic.id}
+                  className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    checked={requiredClaimTopics.includes(topic.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setRequiredClaimTopics([...requiredClaimTopics, topic.id]);
+                      } else {
+                        setRequiredClaimTopics(requiredClaimTopics.filter((id) => id !== topic.id));
+                      }
+                    }}
+                    className="mt-1"
+                    disabled={isSubmitting || loading}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      {topic.name} (ID: {topic.id})
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {topic.description} - {topic.commonUse}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+          {requiredClaimTopics.length > 0 && (
+            <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+              {requiredClaimTopics.length} claim topic(s) seleccionado(s): {requiredClaimTopics.join(', ')}
+            </p>
+          )}
         </div>
 
         <div>

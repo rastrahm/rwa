@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "./context/ThemeContext";
 import { Header } from "./components/layout/Header";
 import { WalletProvider } from "./hooks/useWallet";
+import { TrustedIssuersProvider } from "./context/TrustedIssuersContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,12 +33,14 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <WalletProvider>
-            <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-              <Header />
-              <main className="container mx-auto px-4 py-8">
-        {children}
-              </main>
-            </div>
+            <TrustedIssuersProvider>
+              <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                <Header />
+                <main className="container mx-auto px-4 py-8">
+          {children}
+                </main>
+              </div>
+            </TrustedIssuersProvider>
           </WalletProvider>
         </ThemeProvider>
       </body>

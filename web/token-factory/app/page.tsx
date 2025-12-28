@@ -4,6 +4,8 @@ import React from 'react';
 import { CreateToken } from '@/app/components/tokens/CreateToken';
 import { TokenList } from '@/app/components/tokens/TokenList';
 import { TokenMarketplace } from '@/app/components/tokens/TokenMarketplace';
+import { MyTokens } from '@/app/components/tokens/MyTokens';
+import { MintTokens } from '@/app/components/tokens/MintTokens';
 
 export default function Home() {
   return (
@@ -16,15 +18,21 @@ export default function Home() {
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Columna izquierda: Crear Token */}
+        {/* Columna izquierda: Crear Token y Mintear */}
         <div className="space-y-6">
           <CreateToken />
+          <MintTokens />
         </div>
 
         {/* Columna derecha: Marketplace */}
         <div className="space-y-6">
           <TokenMarketplace />
         </div>
+      </div>
+
+      {/* Mis Tokens - Tokens que el usuario posee */}
+      <div className="mb-6">
+        <MyTokens />
       </div>
 
       {/* Lista de tokens debajo */}

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "./context/ThemeContext";
 import { Header } from "./components/layout/Header";
 import { WalletProvider } from "./hooks/useWallet";
+import { ConnectionStatus } from "./components/connections/ConnectionStatus";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,7 @@ export default function RootLayout({
               <main className="container mx-auto px-4 py-8">
                 {children}
               </main>
+              <ConnectionStatus />
             </div>
           </WalletProvider>
         </ThemeProvider>
